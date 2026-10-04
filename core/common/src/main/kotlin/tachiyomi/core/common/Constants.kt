@@ -3,9 +3,6 @@ package tachiyomi.core.common
 object Constants {
     const val URL_HELP = "https://github.com/leandroizquierdo11-jpg/surge-"
     const val URL_HELP_UPCOMING = "https://github.com/leandroizquierdo11-jpg/surge-"
-    const val URL_DONATE_PATREON = "https://patreon.com/surge/membership"
-    const val URL_DONATE_OPENCOLLECTIVE = "https://opencollective.com/surge/contribute"
-    const val URL_DISCORD = "https://discord.gg/surge"
 
     const val MANGA_EXTRA = "manga"
 

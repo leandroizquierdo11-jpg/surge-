@@ -19,6 +19,15 @@ Descarga el APK de la [última versión](../../releases/latest):
 Después, Surge se actualiza desde la propia app: avisa al abrirla cuando hay versión nueva, y también
 puedes buscarla en *Más → Acerca de → Buscar actualizaciones*.
 
+## Leer archivos de la tablet (fuente local)
+
+1. En *Más → Ajustes → Datos y almacenamiento*, elige la carpeta de Surge.
+2. Dentro, en la carpeta `local`, crea una carpeta por serie y, dentro de ella, una por capítulo con
+   sus imágenes (o un `.cbz`/`.zip` por capítulo).
+3. Opcional: pon `cover.jpg` en la carpeta de la serie para usarla como portada.
+
+Las series aparecen en *Explorar → Fuente local*.
+
 ## Publicar una versión nueva
 
 1. Sube `versionCode` y `versionName` en `app/build.gradle.kts`.

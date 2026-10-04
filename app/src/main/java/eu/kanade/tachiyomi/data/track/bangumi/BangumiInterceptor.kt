@@ -35,7 +35,7 @@ class BangumiInterceptor(private val bangumi: Bangumi) : Interceptor {
         return originalRequest.newBuilder()
             .header(
                 "User-Agent",
-                "antsylich/Surge/v${BuildConfig.VERSION_NAME} (Android) (https://github.com/leandroizquierdo11-jpg/surge-)",
+                "leandroizquierdo11-jpg/Surge/v${BuildConfig.VERSION_NAME} (Android) (https://github.com/leandroizquierdo11-jpg/surge-)",
             )
             .apply {
                 addHeader("Authorization", "Bearer ${currAuth.accessToken}")

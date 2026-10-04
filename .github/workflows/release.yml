@@ -90,4 +90,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Surge $tag" \
+            --latest \
             --notes-file notas.md

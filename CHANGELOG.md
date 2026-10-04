@@ -1,5 +1,11 @@
 # Cambios
 
+## 1.0.1
+
+- Quitados restos del proyecto original: la pantalla de donaciones y sus textos, y los enlaces a
+  Patreon, OpenCollective y Discord que ya no correspondían.
+- Corregida la identificación de la app ante Bangumi.
+
 ## 1.0.0
 
 Primera versión de Surge.
