@@ -55,8 +55,13 @@ jobs:
           script: |
             adb install -r app/build/outputs/apk/debug/app-x86_64-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            adb shell settings put global hide_error_dialogs 1
+            adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS
             adb logcat -c
             adb shell am instrument -w -e class surge.test.WebtoonScrollTest app.surge.dev.test/androidx.test.runner.AndroidJUnitRunner
+            adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" || true
             adb logcat -d -v raw -s SurgeScrollTest:I > resultados.txt
             cat resultados.txt
 

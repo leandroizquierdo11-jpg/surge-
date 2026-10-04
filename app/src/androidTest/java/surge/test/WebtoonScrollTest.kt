@@ -2,6 +2,7 @@ package surge.test
 
 import android.os.SystemClock
 import android.util.Log
+import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -159,7 +160,9 @@ class WebtoonScrollTest {
 
         fun send(action: Int, time: Long, travel: Float) {
             val event = MotionEvent.obtain(downTime, time, action, x, startY - travel, 0)
-            instrumentation.sendPointerSync(event)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            // Injected like a real touchscreen, through the system input pipeline
+            check(instrumentation.uiAutomation.injectInputEvent(event, true)) { "No se pudo inyectar el toque" }
             event.recycle()
             finger += time to travel
         }
