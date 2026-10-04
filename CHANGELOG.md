@@ -1,5 +1,12 @@
 # Cambios
 
+## 1.0.3
+
+- Al soltar el dedo tras un movimiento corto, la tira sigue con la velocidad que llevaba el dedo en
+  vez de frenar de golpe, y los deslizamientos muy lentos se detienen suavemente en lugar de en seco.
+- Nuevo diagnóstico de scroll (Más → Ajustes → Avanzado → Diagnóstico de scroll): mide en tu propio
+  dispositivo lo fluido que va la tira larga y genera un informe para copiar.
+
 ## 1.0.2
 
 Scroll del modo tira larga más fluido en movimientos cortos:

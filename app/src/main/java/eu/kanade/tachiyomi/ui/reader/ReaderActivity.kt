@@ -77,6 +77,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.ScrollDiagnostics
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.R2LPagerViewer
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
@@ -171,6 +172,8 @@ class ReaderActivity : BaseActivity() {
         setContentView(binding.root)
         binding.setComposeOverlay()
         requestHighestRefreshRate()
+        ScrollDiagnostics.enabled = preferences.scrollDiagnostics.get()
+        if (ScrollDiagnostics.enabled) ScrollDiagnostics.attach(window)
 
         if (!viewModel.hasValidArgs) {
             finish()
@@ -268,6 +271,13 @@ class ReaderActivity : BaseActivity() {
             .maxByOrNull { it.refreshRate }
             ?: return
         window.attributes = window.attributes.apply { preferredDisplayModeId = bestMode.modeId }
+        ScrollDiagnostics.supportedRefreshRates = currentDisplay.supportedModes
+            .filter { it.physicalWidth == currentMode.physicalWidth && it.physicalHeight == currentMode.physicalHeight }
+            .map { it.refreshRate }
+            .distinct()
+            .sorted()
+        // The display switches modes asynchronously
+        window.decorView.postDelayed({ ScrollDiagnostics.refreshRate = currentDisplay.refreshRate }, 1000)
     }
 
     private fun ReaderActivityBinding.setComposeOverlay(): Unit = composeOverlay.setComposeContent {
@@ -360,6 +370,7 @@ class ReaderActivity : BaseActivity() {
      * Called when the activity is destroyed. Cleans up the viewer, configuration and any view.
      */
     override fun onDestroy() {
+        ScrollDiagnostics.detach(window)
         super.onDestroy()
         viewModel.state.value.viewer?.destroy()
         config = null

@@ -409,6 +409,9 @@
     <string name="pref_hardware_bitmap_threshold">Custom hardware bitmap threshold</string>
     <string name="pref_hardware_bitmap_threshold_default">Default (%d)</string>
     <string name="pref_hardware_bitmap_threshold_summary">If reader loads a blank image incrementally reduce the threshold.\nSelected: %s</string>
+    <string name="pref_scroll_diagnostics">Scroll diagnostics</string>
+    <string name="pref_scroll_diagnostics_summary">Records how smooth scrolling is in the long strip reader. Turn it on, read for a while with short and long swipes, then copy the report</string>
+    <string name="pref_scroll_diagnostics_copy">Copy scroll report</string>
     <string name="pref_always_decode_long_strip_with_ssiv_2">Use legacy decoder for long strip reader</string>
     <string name="pref_always_decode_long_strip_with_ssiv_summary">Affects performance. Only enable if reducing bitmap threshold doesn\'t fix blank image issues</string>
     <string name="pref_display_profile">Custom display profile</string>

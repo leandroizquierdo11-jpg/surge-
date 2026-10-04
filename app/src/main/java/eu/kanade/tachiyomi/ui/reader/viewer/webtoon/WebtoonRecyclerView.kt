@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.content.Context
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -75,6 +76,9 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     /** Finger speed (px/s, positive when moving up) when it was lifted, used by the next [fling]. */
     private var releaseVelocityY = 0f
 
+    /** The current gesture, recorded only when [ScrollDiagnostics] is enabled. */
+    private var diagnosticGesture: DiagnosticGesture? = null
+
     init {
         // Start following the finger after a smaller movement than Android's default, so short
         // drags don't feel stuck before jumping into motion. Taps are still told apart because a
@@ -105,6 +109,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     private fun trackFinger(e: MotionEvent) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                diagnosticGesture = if (ScrollDiagnostics.enabled) DiagnosticGesture(e.eventTime, e.y) else null
                 recentTouches.clear()
                 gestureHadMultiTouch = false
                 releaseVelocityY = 0f
@@ -115,6 +120,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
                     recentTouches.addLast(TouchSample(e.getHistoricalEventTime(i), e.getHistoricalY(i)))
                 }
                 recentTouches.addLast(TouchSample(e.eventTime, e.y))
+                diagnosticGesture?.lastY = e.y
                 while (e.eventTime - recentTouches.first().time > TOUCH_HISTORY_MS) {
                     recentTouches.removeFirst()
                 }
@@ -122,6 +128,11 @@ class WebtoonRecyclerView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_DOWN -> gestureHadMultiTouch = true
             MotionEvent.ACTION_UP -> {
                 releaseVelocityY = if (gestureHadMultiTouch) 0f else fingerVelocityAt(e.eventTime)
+                diagnosticGesture?.apply {
+                    upTime = e.eventTime
+                    upY = e.y
+                    fingerVelocity = fingerVelocityAt(e.eventTime)
+                }
             }
         }
     }
@@ -142,6 +153,14 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
     override fun onScrolled(dx: Int, dy: Int) {
         super.onScrolled(dx, dy)
+        diagnosticGesture?.apply {
+            if (upTime != 0L) {
+                glidePx += dy
+            } else if (firstMoveTime == 0L && dy != 0) {
+                firstMoveTime = SystemClock.uptimeMillis()
+                firstMoveY = lastY
+            }
+        }
         val layoutManager = layoutManager
         lastVisibleItemPosition =
             (layoutManager as LinearLayoutManager).findLastVisibleItemPosition()
@@ -149,6 +168,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     }
 
     override fun fling(velocityX: Int, velocityY: Int): Boolean {
+        diagnosticGesture?.trackerVelocity = velocityY
         setFlingFriction(flingFriction())
         val fingerVelocity = releaseVelocityY.toInt().coerceIn(-maxFlingVelocity, maxFlingVelocity)
         releaseVelocityY = 0f
@@ -196,13 +216,45 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         atLastPosition = visibleItemCount > 0 && lastVisibleItemPosition == totalItemCount - 1
         atFirstPosition = firstVisibleItemPosition == 0
 
+        ScrollDiagnostics.scrollState = state
         if (state == SCROLL_STATE_IDLE) {
             isManuallyScrolling = false
+            reportDiagnosticGesture()
         }
         if (state == SCROLL_STATE_DRAGGING) {
             tapDuringManualScroll = true
             detector.cancelLongTap()
         }
+    }
+
+    private fun reportDiagnosticGesture() {
+        val gesture = diagnosticGesture ?: return
+        if (gesture.upTime == 0L || gesture.firstMoveTime == 0L) return
+        diagnosticGesture = null
+        val pxPerMm = resources.displayMetrics.ydpi / 25.4
+        ScrollDiagnostics.onGesture(
+            ScrollDiagnostics.Gesture(
+                fingerMm = abs(gesture.upY - gesture.downY) / pxPerMm,
+                durationMs = gesture.upTime - gesture.downTime,
+                startDelayMs = gesture.firstMoveTime - gesture.downTime,
+                startFingerMm = abs(gesture.firstMoveY - gesture.downY) / pxPerMm,
+                trackerSpeed = abs(gesture.trackerVelocity) / pxPerMm,
+                fingerSpeed = abs(gesture.fingerVelocity) / pxPerMm,
+                glideMm = abs(gesture.glidePx) / pxPerMm,
+                glideMs = SystemClock.uptimeMillis() - gesture.upTime,
+            ),
+        )
+    }
+
+    private class DiagnosticGesture(val downTime: Long, val downY: Float) {
+        var lastY = downY
+        var firstMoveTime = 0L
+        var firstMoveY = downY
+        var upTime = 0L
+        var upY = downY
+        var trackerVelocity = 0
+        var fingerVelocity = 0f
+        var glidePx = 0
     }
 
     private fun getPositionX(positionX: Float): Float {

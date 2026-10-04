@@ -119,7 +119,10 @@ class WebtoonAdapter(val viewer: WebtoonViewer) : RecyclerView.Adapter<RecyclerV
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val item = items[position]
         when (holder) {
-            is WebtoonPageHolder -> holder.bind(item as ReaderPage)
+            is WebtoonPageHolder -> {
+                ScrollDiagnostics.onEvent(ScrollDiagnostics.Event.BIND)
+                holder.bind(item as ReaderPage)
+            }
             is WebtoonTransitionHolder -> holder.bind(item as ChapterTransition)
         }
     }

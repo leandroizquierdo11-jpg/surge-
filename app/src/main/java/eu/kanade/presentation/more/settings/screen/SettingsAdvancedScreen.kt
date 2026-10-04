@@ -47,6 +47,8 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
 import eu.kanade.tachiyomi.util.CrashLogUtil
+import eu.kanade.tachiyomi.ui.reader.viewer.webtoon.ScrollDiagnostics
+import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.GLUtil
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import eu.kanade.tachiyomi.util.system.isShizukuInstalled
@@ -364,6 +366,17 @@ object SettingsAdvancedScreen : SearchableSettings {
                     },
                     enabled = !ImageUtil.HARDWARE_BITMAP_UNSUPPORTED &&
                         GLUtil.DEVICE_TEXTURE_LIMIT > GLUtil.SAFE_TEXTURE_LIMIT,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = basePreferences.scrollDiagnostics,
+                    title = stringResource(MR.strings.pref_scroll_diagnostics),
+                    subtitle = stringResource(MR.strings.pref_scroll_diagnostics_summary),
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_scroll_diagnostics_copy),
+                    onClick = {
+                        context.copyToClipboard("Scroll", ScrollDiagnostics.report(context))
+                    },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = basePreferences.alwaysDecodeLongStripWithSSIV,
