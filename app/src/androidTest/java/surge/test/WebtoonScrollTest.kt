@@ -36,6 +36,8 @@ class WebtoonScrollTest {
     private class Gesture(val name: String, val cm: Float, val durationMs: Long, val endSpeed: Float)
 
     private class Result(
+        val lagMm: Double,
+        val fps: Double,
         val startMm: Double,
         val continuity: Double,
         val glideMm: Double,
@@ -63,7 +65,7 @@ class WebtoonScrollTest {
                 Gesture("corto", 2.5f, 140, 0.7f),
                 Gesture("corto lento", 2.5f, 450, 0.25f),
                 Gesture("medio", 5f, 180, 0.9f),
-                Gesture("largo", 10f, 260, 1f),
+                Gesture("largo", 9.5f, 260, 1f),
             )
 
             for (smooth in listOf(false, true)) {
@@ -74,16 +76,18 @@ class WebtoonScrollTest {
                         scenario.onActivity { activity -> activity.moveToMiddle() }
                         instrumentation.waitForIdleSync()
                         SystemClock.sleep(300)
-                        measure(scenario, gesture, pxPerCm, width / 2f, height * 0.75f)
+                        measure(scenario, gesture, pxPerCm, width / 2f, height * 0.93f)
                     }
                     log(
-                        "%-13s | arranque %.1f mm | continuidad %.2f | desliza %.1f mm en %.0f ms | tirones %.1f".format(
+                        "%-13s | arranque %.1f mm | retraso al soltar %.1f mm | continuidad %.2f | desliza %.1f mm en %.0f ms | tirones %.1f | %.0f fps".format(
                             gesture.name,
                             results.map { it.startMm }.average(),
+                            results.map { it.lagMm }.average(),
                             results.map { it.continuity }.average(),
                             results.map { it.glideMm }.average(),
                             results.map { it.glideMs }.average(),
                             results.map { it.jerks }.average(),
+                            results.map { it.fps }.average(),
                         ),
                     )
                 }
@@ -133,7 +137,10 @@ class WebtoonScrollTest {
             top > 0 && abs(b - (a + c) / 2) > top * 0.25
         }
 
-        return Result(startMm, continuity, (end - atUp) * mm, glideMs, jerks)
+        val lagMm = (finger.last().second - atUp) * mm
+        val frameMs = samples.zipWithNext().map { (a, b) -> b[0] - a[0] }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        val fps = if (frameMs > 0) 1000 / frameMs else 0.0
+        return Result(lagMm, fps, startMm, continuity, (end - atUp) * mm, glideMs, jerks)
     }
 
     /** Average speed (px/ms) between the first and last sample. */
@@ -162,23 +169,25 @@ class WebtoonScrollTest {
             val event = MotionEvent.obtain(downTime, time, action, x, startY - travel, 0)
             event.source = InputDevice.SOURCE_TOUCHSCREEN
             // Injected like a real touchscreen, through the system input pipeline
-            check(instrumentation.uiAutomation.injectInputEvent(event, true)) { "No se pudo inyectar el toque" }
+            // Not waiting for the app: like a real finger, the timing doesn't depend on how fast the
+            // app handles each event
+            check(instrumentation.uiAutomation.injectInputEvent(event, false)) { "No se pudo inyectar el toque" }
             event.recycle()
             finger += time to travel
         }
 
         send(MotionEvent.ACTION_DOWN, downTime, 0f)
-        var target = downTime
+        var time = downTime
         while (true) {
-            target += INPUT_INTERVAL_MS
+            time += INPUT_INTERVAL_MS
             val now = SystemClock.uptimeMillis()
-            if (target > now) SystemClock.sleep(target - now)
-            val time = SystemClock.uptimeMillis()
+            if (time > now) SystemClock.sleep(time - now)
             val progress = ((time - downTime).toFloat() / gesture.durationMs).coerceAtMost(1f)
             send(MotionEvent.ACTION_MOVE, time, distance * position(progress, gesture.endSpeed))
             if (progress >= 1f) break
         }
-        send(MotionEvent.ACTION_UP, SystemClock.uptimeMillis(), distance)
+        // The finger lifts right after its last movement
+        send(MotionEvent.ACTION_UP, time + 2, distance)
         return finger
     }
 
