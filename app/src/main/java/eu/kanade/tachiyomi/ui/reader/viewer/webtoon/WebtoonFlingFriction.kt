@@ -11,3 +11,14 @@ package androidx.recyclerview.widget
 fun RecyclerView.setFlingFriction(friction: Float) {
     mViewFlinger.mOverScroller.setFriction(friction)
 }
+
+/**
+ * Sets how far a finger has to move before [RecyclerView] starts scrolling. RecyclerView only offers
+ * two fixed values publicly, so this sets its private field. The field is kept by R8 in
+ * proguard-rules.pro; if it can't be found the default is kept.
+ */
+fun RecyclerView.setTouchSlopCompat(touchSlop: Int) {
+    runCatching {
+        RecyclerView::class.java.getDeclaredField("mTouchSlop").apply { isAccessible = true }.setInt(this, touchSlop)
+    }
+}

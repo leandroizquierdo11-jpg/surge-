@@ -301,7 +301,11 @@ open class ReaderPageImageView @JvmOverloads constructor(
                 isVisible = true
             }
             is BufferedSource -> {
-                if (!isWebtoon || alwaysDecodeLongStripWithSSIV) {
+                // Pages taller than the GPU can hold in one texture can't be hardware bitmaps and are
+                // slow to draw on every scroll frame, so decode them in small tiles instead.
+                val tooTallForGpu = isWebtoon && !ImageUtil.canUseHardwareBitmap(data)
+                if (!isWebtoon || alwaysDecodeLongStripWithSSIV || tooTallForGpu) {
+                    setMaxTileSize(if (tooTallForGpu) TALL_PAGE_TILE_SIZE else ImageUtil.hardwareBitmapThreshold)
                     setHardwareConfig(ImageUtil.canUseHardwareBitmap(data))
                     setImage(ImageSource.inputStream(data.inputStream()))
                     isVisible = true
@@ -431,3 +435,4 @@ open class ReaderPageImageView @JvmOverloads constructor(
 }
 
 private const val MAX_ZOOM_SCALE = 5F
+private const val TALL_PAGE_TILE_SIZE = 2048

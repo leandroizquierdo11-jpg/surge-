@@ -63,6 +63,13 @@ open class GestureDetectorWithLongTap(
     }
 
     /**
+     * Cancels a pending long tap, e.g. when the gesture turned into a scroll.
+     */
+    fun cancelLongTap() {
+        handler.removeCallbacks(longTapFn)
+    }
+
+    /**
      * Custom listener to also include a long tap confirmed
      */
     open class Listener : SimpleOnGestureListener() {

@@ -12,8 +12,10 @@ import androidx.core.animation.doOnEnd
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.setFlingFriction
+import androidx.recyclerview.widget.setTouchSlopCompat
 import eu.kanade.tachiyomi.ui.reader.viewer.GestureDetectorWithLongTap
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.pow
 
 /**
@@ -57,6 +59,13 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     private var isManuallyScrolling = false
     private var tapDuringManualScroll = false
 
+    init {
+        // Start following the finger after a smaller movement than Android's default, so short
+        // drags don't feel stuck before jumping into motion. Taps are still told apart because a
+        // gesture that started scrolling is never treated as a tap (see onScrollStateChanged).
+        setTouchSlopCompat(ViewConfiguration.get(context).scaledTouchSlop / 2)
+    }
+
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
         halfWidth = MeasureSpec.getSize(widthSpec) / 2
         halfHeight = MeasureSpec.getSize(heightSpec) / 2
@@ -93,11 +102,18 @@ class WebtoonRecyclerView @JvmOverloads constructor(
      * Android tunes flings to travel a fixed physical distance, which on a big tablet covers only a
      * small part of the screen, so the strip feels like it stops too early. Lower the friction so a
      * fling covers the same share of the screen as it would on a phone. Phones are left unchanged.
+     * The screen diagonal is used so the result is the same in portrait and landscape.
      */
     private fun flingFriction(): Float {
         val metrics = resources.displayMetrics
-        val screenHeightInches = metrics.heightPixels.toFloat() / metrics.densityDpi
-        val screenRatio = (screenHeightInches / PHONE_SCREEN_HEIGHT_INCHES).coerceIn(1f, MAX_SCREEN_RATIO)
+        // xdpi/ydpi are the physical density, but some devices report bogus values
+        fun physicalDpi(dpi: Float) = dpi.takeIf { it in metrics.densityDpi * 0.5f..metrics.densityDpi * 2f }
+            ?: metrics.densityDpi.toFloat()
+        val screenInches = hypot(
+            metrics.widthPixels / physicalDpi(metrics.xdpi),
+            metrics.heightPixels / physicalDpi(metrics.ydpi),
+        )
+        val screenRatio = (screenInches / PHONE_SCREEN_INCHES).coerceIn(1f, MAX_SCREEN_RATIO)
         // Fling distance scales with friction^-0.736 in OverScroller, hence the exponent.
         return ViewConfiguration.getScrollFriction() / screenRatio.pow(FRICTION_EXPONENT)
     }
@@ -112,6 +128,10 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
         if (state == SCROLL_STATE_IDLE) {
             isManuallyScrolling = false
+        }
+        if (state == SCROLL_STATE_DRAGGING) {
+            tapDuringManualScroll = true
+            detector.cancelLongTap()
         }
     }
 
@@ -376,6 +396,6 @@ private const val ANIMATOR_DURATION_TIME = 200
 private const val MIN_RATE = 0.5f
 private const val DEFAULT_RATE = 1f
 private const val MAX_SCALE_RATE = 3f
-private const val PHONE_SCREEN_HEIGHT_INCHES = 5.5f
+private const val PHONE_SCREEN_INCHES = 6.5f
 private const val MAX_SCREEN_RATIO = 2.5f
 private const val FRICTION_EXPONENT = 1.36f

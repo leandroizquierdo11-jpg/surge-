@@ -1,5 +1,15 @@
 # Cambios
 
+## 1.0.2
+
+Scroll del modo tira larga más fluido en movimientos cortos:
+
+- La tira empieza a moverse en cuanto mueves el dedo, sin quedarse quieta un instante antes de arrancar.
+- Al soltar, sigue deslizándose y frena suave también en horizontal (antes la inercia casi no se
+  notaba en tablets en horizontal).
+- Las páginas extremadamente altas se cargan por trozos, para que no den tirones al pasar por ellas.
+- Un arrastre corto ya no se confunde con un toque (que pasaba de página) ni con una pulsación larga.
+
 ## 1.0.1
 
 - Quitados restos del proyecto original: la pantalla de donaciones y sus textos, y los enlaces a

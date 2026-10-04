@@ -91,6 +91,11 @@
 -keep,allowoptimization class kotlinx.datetime.** { public protected *; }
 
 # Methods called by Shizuku only
+# Touch slop of the long strip reader, set through reflection
+-keepclassmembers class androidx.recyclerview.widget.RecyclerView {
+    int mTouchSlop;
+}
+
 -keepclassmembers class surge.app.shizuku.ShellInterface {
     public <init>();
     public void destroy();
