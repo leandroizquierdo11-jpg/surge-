@@ -85,11 +85,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$KEYSTORE_PASSWORD" ]; then
-            export MIHON_GITHUB_RELEASE=true
-            export storeFile="$GITHUB_WORKSPACE/keystore/surge.p12"
-            export storePassword="$KEYSTORE_PASSWORD"
-            export keyAlias=surge
-            export keyPassword="$KEYSTORE_PASSWORD"
+            # keystore.properties en la raíz es la forma de firmar que Mihon admite en todas sus versiones.
+            {
+              echo "storeFile=$GITHUB_WORKSPACE/keystore/surge.p12"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=surge"
+              echo "keyPassword=$KEYSTORE_PASSWORD"
+            } > keystore.properties
           else
             echo "::warning::Falta el secreto KEYSTORE_PASSWORD: el APK se firma con una clave de prueba y no se publica."
           fi
