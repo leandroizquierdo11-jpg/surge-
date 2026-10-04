@@ -20,6 +20,9 @@ Todo pensado para que el modo tira larga vaya fluido en tablets:
 - `0003-tira-larga-precarga-mas-paginas.patch`: las páginas se preparan hasta dos pantallas por delante
   (antes, tres cuartos de pantalla). En una tablet cada página ocupa varias pantallas de alto, así que la
   siguiente suele estar lista antes de que llegues a ella, sin esperas ni saltos.
+- `0004-tira-larga-inercia-segun-pantalla.patch`: al soltar el dedo, la tira sigue deslizándose con inercia
+  proporcional al tamaño de la pantalla. Android calcula esa inercia en centímetros reales pensando en un móvil,
+  así que en una tablet grande el deslizamiento se paraba demasiado pronto. En móviles no cambia nada.
 
 La app tiene su propio logo (en `recursos/drawable/`) y se instala como **Surge** (`app.mihon.surge`), al lado de la Mihon oficial, porque está firmada con otra
 clave. Para pasar tu biblioteca: en Mihon *Más → Copia de seguridad y restauración → Crear copia*, y en Surge

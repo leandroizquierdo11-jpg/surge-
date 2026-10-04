@@ -1,0 +1,81 @@
+From 5cd6486ff61c2bd2519028c9fb15277064116c48 Mon Sep 17 00:00:00 2001
+From: leandroizquierdo11-jpg
+ <336344874+leandroizquierdo11-jpg@users.noreply.github.com>
+Date: Sun, 4 Oct 2026 08:04:10 +0000
+Subject: [PATCH] Webtoon: scale fling momentum to the screen size
+
+---
+ .../viewer/webtoon/WebtoonFlingFriction.kt    | 13 +++++++++++
+ .../viewer/webtoon/WebtoonRecyclerView.kt     | 23 +++++++++++++++++++
+ 2 files changed, 36 insertions(+)
+ create mode 100644 app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonFlingFriction.kt
+
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonFlingFriction.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonFlingFriction.kt
+new file mode 100644
+index 0000000..2876a6b
+--- /dev/null
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonFlingFriction.kt
+@@ -0,0 +1,13 @@
++@file:Suppress("PackageDirectoryMismatch")
++
++package androidx.recyclerview.widget
++
++/**
++ * Sets the friction of the scroller used by [RecyclerView.fling].
++ *
++ * This uses the same package name as the support library in order to reach its package
++ * protected fling scroller, which has no public API.
++ */
++fun RecyclerView.setFlingFriction(friction: Float) {
++    mViewFlinger.mOverScroller.setFriction(friction)
++}
+diff --git a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonRecyclerView.kt b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonRecyclerView.kt
+index c2ed4aa..670eb3e 100644
+--- a/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonRecyclerView.kt
++++ b/app/src/main/java/eu/kanade/tachiyomi/ui/reader/viewer/webtoon/WebtoonRecyclerView.kt
+@@ -11,8 +11,10 @@ import android.view.animation.DecelerateInterpolator
+ import androidx.core.animation.doOnEnd
+ import androidx.recyclerview.widget.LinearLayoutManager
+ import androidx.recyclerview.widget.RecyclerView
++import androidx.recyclerview.widget.setFlingFriction
+ import eu.kanade.tachiyomi.ui.reader.viewer.GestureDetectorWithLongTap
+ import kotlin.math.abs
++import kotlin.math.pow
+ 
+ /**
+  * Implementation of a [RecyclerView] used by the webtoon reader.
+@@ -82,6 +84,24 @@ class WebtoonRecyclerView @JvmOverloads constructor(
+         firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
+     }
+ 
++    override fun fling(velocityX: Int, velocityY: Int): Boolean {
++        setFlingFriction(flingFriction())
++        return super.fling(velocityX, velocityY)
++    }
++
++    /**
++     * Android tunes flings to travel a fixed physical distance, which on a big tablet covers only a
++     * small part of the screen, so the strip feels like it stops too early. Lower the friction so a
++     * fling covers the same share of the screen as it would on a phone. Phones are left unchanged.
++     */
++    private fun flingFriction(): Float {
++        val metrics = resources.displayMetrics
++        val screenHeightInches = metrics.heightPixels.toFloat() / metrics.densityDpi
++        val screenRatio = (screenHeightInches / PHONE_SCREEN_HEIGHT_INCHES).coerceIn(1f, MAX_SCREEN_RATIO)
++        // Fling distance scales with friction^-0.736 in OverScroller, hence the exponent.
++        return ViewConfiguration.getScrollFriction() / screenRatio.pow(FRICTION_EXPONENT)
++    }
++
+     override fun onScrollStateChanged(state: Int) {
+         super.onScrollStateChanged(state)
+         val layoutManager = layoutManager
+@@ -356,3 +376,6 @@ private const val ANIMATOR_DURATION_TIME = 200
+ private const val MIN_RATE = 0.5f
+ private const val DEFAULT_RATE = 1f
+ private const val MAX_SCALE_RATE = 3f
++private const val PHONE_SCREEN_HEIGHT_INCHES = 5.5f
++private const val MAX_SCREEN_RATIO = 2.5f
++private const val FRICTION_EXPONENT = 1.36f
+-- 
+2.43.0
+
