@@ -1,0 +1,15 @@
+# Cambios
+
+## 1.0.0
+
+Primera versión de Surge.
+
+- Scroll del modo tira larga mucho más fluido en tablets:
+  - El lector ya no dibuja la pantalla dos veces en cada fotograma.
+  - Usa la tasa de refresco más alta de la pantalla (90/120 Hz) mientras lees.
+  - Prepara las páginas con dos pantallas de antelación para que no haya esperas ni saltos.
+  - Al soltar el dedo, la inercia se adapta al tamaño de la pantalla: en una tablet grande el
+    deslizamiento llega más lejos y se frena de forma suave.
+- Logo y nombre propios.
+- Las actualizaciones llegan dentro de la app: *Más → Acerca de → Buscar actualizaciones*, y también
+  te avisa sola al abrirla.
