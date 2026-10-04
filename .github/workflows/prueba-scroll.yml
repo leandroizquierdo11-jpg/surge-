@@ -58,6 +58,7 @@ jobs:
             adb shell input keyevent KEYCODE_WAKEUP
             adb shell wm dismiss-keyguard
             adb shell settings put global hide_error_dialogs 1
+            adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher || true
             adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS
             adb logcat -c
             adb shell am instrument -w -e class surge.test.WebtoonScrollTest app.surge.dev.test/androidx.test.runner.AndroidJUnitRunner

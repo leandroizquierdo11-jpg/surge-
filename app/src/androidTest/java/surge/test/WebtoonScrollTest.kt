@@ -1,9 +1,12 @@
 package surge.test
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -102,8 +105,12 @@ class WebtoonScrollTest {
         x: Float,
         startY: Float,
     ): Result {
-        scenario.onActivity { it.startRecording() }
-        val finger = swipe(gesture, pxPerCm, x, startY)
+        var view: View? = null
+        scenario.onActivity {
+            view = it.window.decorView
+            it.startRecording()
+        }
+        val finger = swipe(view!!, gesture, pxPerCm, x, startY)
         // Let the strip settle
         SystemClock.sleep(2000)
         var samples: List<DoubleArray> = emptyList()
@@ -159,35 +166,40 @@ class WebtoonScrollTest {
         return p0 + (p1 - p0) * (time - t0) / (t1 - t0)
     }
 
-    /** Swipes up (scrolling the strip down). Returns (event time, finger travel in px). */
-    private fun swipe(gesture: Gesture, pxPerCm: Float, x: Float, startY: Float): List<Pair<Long, Float>> {
+    /**
+     * Swipes up (scrolling the strip down). Returns (event time, finger travel in px).
+     *
+     * The events are handed to the window on the main thread at their exact times, like Android does
+     * with touchscreen input, instead of going through the emulator's input system: on CI the
+     * emulator is slow enough for system dialogs ("app not responding") to pop up and take the touches.
+     */
+    private fun swipe(view: View, gesture: Gesture, pxPerCm: Float, x: Float, startY: Float): List<Pair<Long, Float>> {
         val distance = gesture.cm * pxPerCm
-        val downTime = SystemClock.uptimeMillis()
+        val downTime = SystemClock.uptimeMillis() + 100
         val finger = ArrayList<Pair<Long, Float>>()
+        val handler = Handler(Looper.getMainLooper())
 
-        fun send(action: Int, time: Long, travel: Float) {
+        fun post(action: Int, time: Long, travel: Float) {
             val event = MotionEvent.obtain(downTime, time, action, x, startY - travel, 0)
             event.source = InputDevice.SOURCE_TOUCHSCREEN
-            // Injected like a real touchscreen, through the system input pipeline
-            // Not waiting for the app: like a real finger, the timing doesn't depend on how fast the
-            // app handles each event
-            check(instrumentation.uiAutomation.injectInputEvent(event, false)) { "No se pudo inyectar el toque" }
-            event.recycle()
+            handler.postAtTime({
+                view.dispatchTouchEvent(event)
+                event.recycle()
+            }, time)
             finger += time to travel
         }
 
-        send(MotionEvent.ACTION_DOWN, downTime, 0f)
+        post(MotionEvent.ACTION_DOWN, downTime, 0f)
         var time = downTime
         while (true) {
             time += INPUT_INTERVAL_MS
-            val now = SystemClock.uptimeMillis()
-            if (time > now) SystemClock.sleep(time - now)
             val progress = ((time - downTime).toFloat() / gesture.durationMs).coerceAtMost(1f)
-            send(MotionEvent.ACTION_MOVE, time, distance * position(progress, gesture.endSpeed))
+            post(MotionEvent.ACTION_MOVE, time, distance * position(progress, gesture.endSpeed))
             if (progress >= 1f) break
         }
         // The finger lifts right after its last movement
-        send(MotionEvent.ACTION_UP, time + 2, distance)
+        post(MotionEvent.ACTION_UP, time + 2, distance)
+        SystemClock.sleep(time + 2 - SystemClock.uptimeMillis() + 50)
         return finger
     }
 
