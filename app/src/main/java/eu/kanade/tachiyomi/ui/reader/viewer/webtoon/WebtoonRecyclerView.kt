@@ -11,12 +11,14 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.animation.doOnEnd
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.flingWithoutMinimum
 import androidx.recyclerview.widget.setFlingFriction
 import androidx.recyclerview.widget.setTouchSlopCompat
 import eu.kanade.tachiyomi.ui.reader.viewer.GestureDetectorWithLongTap
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.pow
+import kotlin.math.sign
 
 /**
  * Implementation of a [RecyclerView] used by the webtoon reader.
@@ -59,6 +61,20 @@ class WebtoonRecyclerView @JvmOverloads constructor(
     private var isManuallyScrolling = false
     private var tapDuringManualScroll = false
 
+    /**
+     * Makes short gestures end like long ones: when the finger is lifted the strip keeps the finger's
+     * speed and slows down gradually, instead of slowing down abruptly or stopping dead. Can be turned
+     * off to compare (see WebtoonScrollTest).
+     */
+    internal var smoothShortGestures = true
+
+    /** Finger positions of the current gesture over the last [TOUCH_HISTORY_MS]. */
+    private val recentTouches = ArrayDeque<TouchSample>()
+    private var gestureHadMultiTouch = false
+
+    /** Finger speed (px/s, positive when moving up) when it was lifted, used by the next [fling]. */
+    private var releaseVelocityY = 0f
+
     init {
         // Start following the finger after a smaller movement than Android's default, so short
         // drags don't feel stuck before jumping into motion. Taps are still told apart because a
@@ -81,8 +97,47 @@ class WebtoonRecyclerView @JvmOverloads constructor(
             tapDuringManualScroll = isManuallyScrolling
         }
 
+        trackFinger(e)
         detector.onTouchEvent(e)
         return super.onTouchEvent(e)
+    }
+
+    private fun trackFinger(e: MotionEvent) {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                recentTouches.clear()
+                gestureHadMultiTouch = false
+                releaseVelocityY = 0f
+                recentTouches.addLast(TouchSample(e.eventTime, e.y))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                for (i in 0..<e.historySize) {
+                    recentTouches.addLast(TouchSample(e.getHistoricalEventTime(i), e.getHistoricalY(i)))
+                }
+                recentTouches.addLast(TouchSample(e.eventTime, e.y))
+                while (e.eventTime - recentTouches.first().time > TOUCH_HISTORY_MS) {
+                    recentTouches.removeFirst()
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> gestureHadMultiTouch = true
+            MotionEvent.ACTION_UP -> {
+                releaseVelocityY = if (gestureHadMultiTouch) 0f else fingerVelocityAt(e.eventTime)
+            }
+        }
+    }
+
+    /**
+     * Finger speed over its last [RELEASE_WINDOW_MS] before being lifted at [upTime], or 0 if it had
+     * stopped. Android's own estimate looks further back, so in short gestures, where the finger
+     * is still speeding up when it's lifted, it's lower than the speed the strip was moving at.
+     */
+    private fun fingerVelocityAt(upTime: Long): Float {
+        val last = recentTouches.lastOrNull() ?: return 0f
+        if (upTime - last.time > FINGER_STOPPED_MS) return 0f
+        val first = recentTouches.firstOrNull { last.time - it.time <= RELEASE_WINDOW_MS } ?: return 0f
+        val dt = last.time - first.time
+        if (dt < MIN_RELEASE_WINDOW_MS) return 0f
+        return (first.y - last.y) * 1000f / dt
     }
 
     override fun onScrolled(dx: Int, dy: Int) {
@@ -95,7 +150,22 @@ class WebtoonRecyclerView @JvmOverloads constructor(
 
     override fun fling(velocityX: Int, velocityY: Int): Boolean {
         setFlingFriction(flingFriction())
-        return super.fling(velocityX, velocityY)
+        val fingerVelocity = releaseVelocityY.toInt().coerceIn(-maxFlingVelocity, maxFlingVelocity)
+        releaseVelocityY = 0f
+        if (!smoothShortGestures || currentScale != DEFAULT_RATE) {
+            return super.fling(velocityX, velocityY)
+        }
+
+        // Keep the finger's speed if Android's estimate is lower, so the strip doesn't slow down the
+        // instant the finger is lifted
+        val sameDirection = velocityY == 0 || fingerVelocity.sign == velocityY.sign
+        val flingVelocity = if (sameDirection && abs(fingerVelocity) > abs(velocityY)) fingerVelocity else velocityY
+        if (super.fling(velocityX, flingVelocity)) return true
+
+        // Too slow for a fling: glide briefly to a stop instead of stopping dead
+        if (abs(flingVelocity) < minFlingVelocity / 4) return false
+        flingWithoutMinimum(flingVelocity)
+        return true
     }
 
     /**
@@ -399,3 +469,9 @@ private const val MAX_SCALE_RATE = 3f
 private const val PHONE_SCREEN_INCHES = 6.5f
 private const val MAX_SCREEN_RATIO = 2.5f
 private const val FRICTION_EXPONENT = 1.36f
+private const val TOUCH_HISTORY_MS = 100L
+private const val RELEASE_WINDOW_MS = 50L
+private const val MIN_RELEASE_WINDOW_MS = 16L
+private const val FINGER_STOPPED_MS = 40L
+
+private class TouchSample(val time: Long, val y: Float)
