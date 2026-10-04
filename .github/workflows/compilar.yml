@@ -1,0 +1,133 @@
+name: Compilar Surge
+
+on:
+  schedule:
+    # Todos los días: si salió una versión nueva de Mihon, se compila con los parches.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      forzar:
+        description: "Compilar aunque ya exista la release para esta versión"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "patches/**"
+      - "scripts/**"
+      - "REVISION"
+      - ".github/workflows/compilar.yml"
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: compilar
+  cancel-in-progress: false
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Descargar este repo
+        uses: actions/checkout@v4
+
+      - name: Buscar la última versión de Mihon
+        id: version
+        run: |
+          set -euo pipefail
+          upstream=$(gh release view --repo mihonapp/mihon --json tagName -q .tagName)
+          revision=$(tr -d '[:space:]' < REVISION)
+          tag="${upstream}-surge${revision}"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
+              && [ "${{ github.event_name }}" != "push" ] \
+              && [ "${{ inputs.forzar }}" != "true" ]; then
+            echo "La release $tag ya existe, nada que hacer."
+            echo "compilar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Se compilará $tag"
+            echo "compilar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Descargar Mihon ${{ steps.version.outputs.upstream }}
+        if: steps.version.outputs.compilar == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: mihonapp/mihon
+          ref: ${{ steps.version.outputs.upstream }}
+          path: mihon
+
+      - name: Aplicar parches
+        if: steps.version.outputs.compilar == 'true'
+        run: scripts/aplicar.sh mihon
+
+      - name: Instalar Java
+        if: steps.version.outputs.compilar == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version-file: mihon/.github/.java-version
+          distribution: temurin
+
+      - name: Instalar Gradle
+        if: steps.version.outputs.compilar == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        if: steps.version.outputs.compilar == 'true'
+        working-directory: mihon
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_PASSWORD" ]; then
+            export MIHON_GITHUB_RELEASE=true
+            export storeFile="$GITHUB_WORKSPACE/keystore/surge.p12"
+            export storePassword="$KEYSTORE_PASSWORD"
+            export keyAlias=surge
+            export keyPassword="$KEYSTORE_PASSWORD"
+          else
+            echo "::warning::Falta el secreto KEYSTORE_PASSWORD: el APK se firma con una clave de prueba y no se publica."
+          fi
+          ./gradlew assembleRelease
+
+          mkdir -p "$GITHUB_WORKSPACE/salida"
+          tag="${{ steps.version.outputs.tag }}"
+          mv app/build/outputs/apk/release/app-universal-release.apk "$GITHUB_WORKSPACE/salida/surge-$tag.apk"
+          mv app/build/outputs/apk/release/app-arm64-v8a-release.apk "$GITHUB_WORKSPACE/salida/surge-arm64-v8a-$tag.apk"
+
+      - name: Guardar APK como artefacto
+        if: steps.version.outputs.compilar == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: surge-${{ steps.version.outputs.tag }}
+          path: salida/*.apk
+
+      - name: Publicar release
+        if: steps.version.outputs.compilar == 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "Sin KEYSTORE_PASSWORD no se publica la release."
+            exit 0
+          fi
+          tag="${{ steps.version.outputs.tag }}"
+          upstream="${{ steps.version.outputs.upstream }}"
+          gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes > /dev/null 2>&1 || true
+          gh release create "$tag" salida/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Surge $tag" \
+            --notes "Mihon $upstream (https://github.com/mihonapp/mihon/releases/tag/$upstream) con los parches de este repo. Para la tablet descarga \`surge-arm64-v8a-$tag.apk\`; si no funciona, \`surge-$tag.apk\`."
+
+      - name: Avisar si algo falló
+        if: failure()
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Falló la compilación de ${{ steps.version.outputs.tag }}" \
+            --body "Revisa el registro: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Lo más probable es que el parche ya no encaje en la nueva versión de Mihon y haya que adaptarlo."
