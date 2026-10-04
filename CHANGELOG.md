@@ -1,5 +1,13 @@
 # Cambios
 
+## 1.0.4
+
+- Inercia nueva en la tira larga: al soltar el dedo, la tira sale a la velocidad de tu dedo y va
+  frenando poco a poco, igual en movimientos pequeños que en grandes (antes los pequeños se paraban
+  en seco).
+- Un movimiento que mueve la tira ya no cuenta como toque: varios movimientos pequeños seguidos ya no
+  activan el zoom de doble toque ni hacen que la página se pueda mover hacia los lados.
+
 ## 1.0.3
 
 - Al soltar el dedo tras un movimiento corto, la tira sigue con la velocidad que llevaba el dedo en

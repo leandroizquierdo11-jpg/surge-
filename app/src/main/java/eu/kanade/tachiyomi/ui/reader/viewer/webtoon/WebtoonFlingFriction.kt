@@ -13,14 +13,6 @@ fun RecyclerView.setFlingFriction(friction: Float) {
 }
 
 /**
- * Starts a fling even if [velocityY] is below RecyclerView's minimum fling velocity, which
- * [RecyclerView.fling] would ignore.
- */
-fun RecyclerView.flingWithoutMinimum(velocityY: Int) {
-    mViewFlinger.fling(0, velocityY)
-}
-
-/**
  * Sets how far a finger has to move before [RecyclerView] starts scrolling. RecyclerView only offers
  * two fixed values publicly, so this sets its private field. The field is kept by R8 in
  * proguard-rules.pro; if it can't be found the default is kept.

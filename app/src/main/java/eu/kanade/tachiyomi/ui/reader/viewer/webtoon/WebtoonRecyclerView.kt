@@ -9,17 +9,20 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.Interpolator
 import androidx.core.animation.doOnEnd
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.flingWithoutMinimum
 import androidx.recyclerview.widget.setFlingFriction
 import androidx.recyclerview.widget.setTouchSlopCompat
 import eu.kanade.tachiyomi.ui.reader.viewer.GestureDetectorWithLongTap
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sign
+import kotlin.math.sqrt
 
 /**
  * Implementation of a [RecyclerView] used by the webtoon reader.
@@ -180,12 +183,28 @@ class WebtoonRecyclerView @JvmOverloads constructor(
         // instant the finger is lifted
         val sameDirection = velocityY == 0 || fingerVelocity.sign == velocityY.sign
         val flingVelocity = if (sameDirection && abs(fingerVelocity) > abs(velocityY)) fingerVelocity else velocityY
-        if (super.fling(velocityX, flingVelocity)) return true
-
-        // Too slow for a fling: glide briefly to a stop instead of stopping dead
         if (abs(flingVelocity) < minFlingVelocity / 4) return false
-        flingWithoutMinimum(flingVelocity)
+        isManuallyScrolling = true
+        glide(flingVelocity)
         return true
+    }
+
+    /**
+     * Keeps the strip moving after the finger is lifted, starting at [velocity] (px/s) and slowing
+     * down gradually (exponential decay, like an object sliding to a stop). Unlike Android's fling,
+     * which makes slow releases stop within a few millimetres, every release ends smoothly, short or
+     * long; a faster release just goes further.
+     */
+    private fun glide(velocity: Int) {
+        val timeConstant = GLIDE_TIME_CONSTANT_S * sqrt(screenRatio())
+        val distance = (velocity * timeConstant * (1 - exp(-GLIDE_DECAY))).roundToInt()
+        val duration = (GLIDE_DECAY * timeConstant * 1000).roundToInt()
+        if (distance == 0) return
+        smoothScrollBy(0, distance, glideInterpolator, duration)
+    }
+
+    private val glideInterpolator = Interpolator { t ->
+        ((1 - exp(-GLIDE_DECAY * t)) / (1 - exp(-GLIDE_DECAY))).toFloat()
     }
 
     /**
@@ -195,6 +214,12 @@ class WebtoonRecyclerView @JvmOverloads constructor(
      * The screen diagonal is used so the result is the same in portrait and landscape.
      */
     private fun flingFriction(): Float {
+        // Fling distance scales with friction^-0.736 in OverScroller, hence the exponent.
+        return ViewConfiguration.getScrollFriction() / screenRatio().pow(FRICTION_EXPONENT)
+    }
+
+    /** Screen size relative to a phone's (1 on phones, larger on tablets). */
+    private fun screenRatio(): Float {
         val metrics = resources.displayMetrics
         // xdpi/ydpi are the physical density, but some devices report bogus values
         fun physicalDpi(dpi: Float) = dpi.takeIf { it in metrics.densityDpi * 0.5f..metrics.densityDpi * 2f }
@@ -203,9 +228,7 @@ class WebtoonRecyclerView @JvmOverloads constructor(
             metrics.widthPixels / physicalDpi(metrics.xdpi),
             metrics.heightPixels / physicalDpi(metrics.ydpi),
         )
-        val screenRatio = (screenInches / PHONE_SCREEN_INCHES).coerceIn(1f, MAX_SCREEN_RATIO)
-        // Fling distance scales with friction^-0.736 in OverScroller, hence the exponent.
-        return ViewConfiguration.getScrollFriction() / screenRatio.pow(FRICTION_EXPONENT)
+        return (screenInches / PHONE_SCREEN_INCHES).coerceIn(1f, MAX_SCREEN_RATIO)
     }
 
     override fun onScrollStateChanged(state: Int) {
@@ -222,8 +245,20 @@ class WebtoonRecyclerView @JvmOverloads constructor(
             reportDiagnosticGesture()
         }
         if (state == SCROLL_STATE_DRAGGING) {
+            // Touching the strip while it glides stops it, and that touch isn't a tap either
+            isManuallyScrolling = true
             tapDuringManualScroll = true
             detector.cancelLongTap()
+            // A gesture that moved the strip must not count as a tap: otherwise a tiny swipe followed by
+            // another one is taken for "double tap and drag", which zooms the page and lets it move
+            // sideways
+            if (currentScale == DEFAULT_RATE) {
+                val now = SystemClock.uptimeMillis()
+                val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+                detector.onTouchEvent(cancel)
+                (parent as? WebtoonFrame)?.cancelGestures(cancel)
+                cancel.recycle()
+            }
         }
     }
 
@@ -525,5 +560,7 @@ private const val TOUCH_HISTORY_MS = 100L
 private const val RELEASE_WINDOW_MS = 50L
 private const val MIN_RELEASE_WINDOW_MS = 16L
 private const val FINGER_STOPPED_MS = 40L
+private const val GLIDE_TIME_CONSTANT_S = 0.35f
+private const val GLIDE_DECAY = 4f
 
 private class TouchSample(val time: Long, val y: Float)

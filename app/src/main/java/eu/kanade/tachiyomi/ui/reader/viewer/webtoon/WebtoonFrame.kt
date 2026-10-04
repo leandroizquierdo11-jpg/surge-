@@ -46,6 +46,15 @@ class WebtoonFrame(context: Context) : FrameLayout(context) {
         get() = getChildAt(0) as? WebtoonRecyclerView
 
     /**
+     * Ends the current gesture for the scale and fling detectors, e.g. because it turned into a
+     * scroll and must not count as a tap (or the first tap of a double tap).
+     */
+    fun cancelGestures(cancel: MotionEvent) {
+        scaleDetector.onTouchEvent(cancel)
+        flingDetector.onTouchEvent(cancel)
+    }
+
+    /**
      * Dispatches a touch event to the detectors.
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
